@@ -141,32 +141,33 @@ class FIDataset(utils.Dataset):
 if __name__ == "__main__":
     config = FIConfig()
 
-    # import visualize
-    # from model import log
+    import visualize
+    from model import log
+
+    dataset = FIDataset()
+    dataset.load_FI()
+    dataset.prepare()
+    image_num = np.random.randint(0, 10000)
+    original_image, image_meta, gt_class_id, gt_bbox, gt_keypoint =\
+        modellib.load_image_gt_keypoints(dataset, FIConfig, 7023)
+    log("original_image", original_image)
+    log("image_meta", image_meta)
+    log("gt_class_id", gt_class_id)
+    log("gt_bbox", gt_bbox)
+    log("gt_keypoint", gt_keypoint)
+    visualize.display_keypoints(original_image,gt_bbox,gt_keypoint,gt_class_id,dataset.class_names)
+
+    # data_tra = FIDataset()
+    # data_tra.load_FI()
+    # data_tra.prepare()
     #
-    # dataset = FIDataset()
-    # dataset.load_FI()
-    # dataset.prepare()
-    # original_image, image_meta, gt_class_id, gt_bbox, gt_keypoint =\
-    #     modellib.load_image_gt_keypoints(dataset, FIConfig, 0)
-    # log("original_image", original_image)
-    # log("image_meta", image_meta)
-    # log("gt_class_id", gt_class_id)
-    # log("gt_bbox", gt_bbox)
-    # log("gt_keypoint", gt_keypoint)
-    # visualize.display_keypoints(original_image,gt_bbox,gt_keypoint,gt_class_id,dataset.class_names)
-
-    data_tra = FIDataset()
-    data_tra.load_FI()
-    data_tra.prepare()
-
-    data_val = FIDataset()
-    data_val.load_FI()
-    data_val.prepare()
-    model = modellib.MaskRCNN(mode='training', config=config, model_dir='./')
-    model.load_weights('./mask_rcnn_coco.h5', by_name=True,
-                       exclude=["mrcnn_class_logits", "mrcnn_bbox_fc", "mrcnn_bbox", "mrcnn_mask"])
-    model.train(data_tra, data_val,
-                learning_rate=config.LEARNING_RATE/10,
-                epochs=400, layers='heads')
+    # data_val = FIDataset()
+    # data_val.load_FI()
+    # data_val.prepare()
+    # model = modellib.MaskRCNN(mode='training', config=config, model_dir='./')
+    # model.load_weights('./mask_rcnn_coco.h5', by_name=True,
+    #                    exclude=["mrcnn_class_logits", "mrcnn_bbox_fc", "mrcnn_bbox", "mrcnn_mask"])
+    # model.train(data_tra, data_val,
+    #             learning_rate=config.LEARNING_RATE/10,
+    #             epochs=400, layers='heads')
 
