@@ -57,7 +57,7 @@ class FIConfig(Config):
     # Train on 1 GPU and 8 images per GPU. We can put multiple images on each
     # GPU because the images are small. Batch size is 8 (GPUs * images/GPU).
     GPU_COUNT = 1
-    IMAGES_PER_GPU = 8
+    IMAGES_PER_GPU = 2
     NUM_KEYPOINTS = len(PART_INDEX[IMAGE_CATEGORY])  # 更改当前训练关键点数目
     KEYPOINT_MASK_SHAPE = [56, 56]
 
@@ -90,35 +90,49 @@ class FIDataset(utils.Dataset):
     shapes (triangles, squares, circles) placed randomly on a blank surface.
     The images are generated on the fly. No file access required.
     """
-    def load_FI(self, category='train'):
+    with_mask = False
+
+    def load_FI(self, training = True):
         """Generate the requested number of synthetic images.
         count: number of images to generate.
         height, width: the size of the generated images.
         """
-        if category == 'train':
-            csv_data = pd.concat([pd.read_csv('../keypoint_data/train1.csv'),
-                                  pd.read_csv('../keypoint_data/train2.csv')],
-                                 axis=0,
-                                 ignore_index=True  # 忽略索引表示不会直接拼接索引，会重新计算行数索引
-                                )
-            class_data = csv_data[csv_data.image_category.isin(['blouse'])]
+        csv_data = pd.concat([pd.read_csv('../keypoint_data/train1.csv'),
+                              pd.read_csv('../keypoint_data/train2.csv')],
+                             axis=0,
+                             ignore_index=True  # 忽略索引表示不会直接拼接索引，会重新计算行数索引
+                             )
+        items_num = csv_data[csv_data.image_category.isin(['blouse'])].shape[0]
+        if training:
+            load_data = csv_data[csv_data.image_category.isin(['blouse'])][:int(items_num * 0.8)]
+        else:
+            load_data = csv_data[csv_data.image_category.isin(['blouse'])][int(items_num * 0.8):]
 
         # Add classes
         self.add_class(source="FI", class_id=1, class_name='blouse')
 
         # Add images
-        for i in range(class_data.shape[0]):
-            annotation = class_data.iloc[i]
+        for i in range(load_data.shape[0]):
+            annotation = load_data.iloc[i]
             img_path = os.path.join("../keypoint_data", annotation.image_id)
             keypoints = np.array([p.split('_')
-                                  for p in class_data.iloc[i][2:]], dtype=int)[PART_INDEX[IMAGE_CATEGORY], :]
+                                  for p in load_data.iloc[i][2:]], dtype=int)[PART_INDEX[IMAGE_CATEGORY], :]
             keypoints[:, -1] += 1
-            self.add_image(source="FI",
-                           image_id=i,
-                           path=img_path,
-                           annotations=keypoints)
+            if self.with_mask:
+                w, h = image_size(img_path)
+                self.add_image(source="FI",
+                               image_id=i,
+                               path=img_path,
+                               width=w,
+                               hight=h,
+                               keypoints=keypoints)
+            else:
+                self.add_image(source="FI",
+                               image_id=i,
+                               path=img_path,
+                               keypoints=keypoints)
 
-    def load_keypoints(self, image_id, with_mask=True):
+    def load_keypoints(self, image_id):
         """
         Returns:
         key_points: num_keypoints coordinates and visibility (x,y,v)  [num_person,num_keypoints,3] of num_person
@@ -126,48 +140,53 @@ class FIDataset(utils.Dataset):
             one mask per instance.
         class_ids: a 1D array of class IDs of the instance masks, here is always equal to [num_person, 1]
         """
-        key_points = np.expand_dims(self.image_info[image_id]["annotations"], 0)  # 已知图中仅有一个对象
+        keypoints = self.image_info[image_id]["keypoints"]
         class_ids = np.array([1])
 
-        if with_mask:
-            annotations = self.image_info[image_id]["annotations"]
-            w, h = image_size(self.image_info[image_id]["path"])
+        if self.with_mask:
+            w, h = self.image_info[image_id]["width"], \
+                   self.image_info[image_id]["hight"]
             mask = np.zeros([w, h], dtype=int)
-            mask[annotations[:, 1], annotations[:, 0]] = 1
-            return key_points.copy(), np.expand_dims(mask, -1), class_ids
-        return key_points.copy(), None, class_ids
+            try:
+                mask[keypoints[:, 1], keypoints[:, 0]] = 1
+            except IndexError as e:
+                print(e)
+                print("Image serial number is {}".format(image_id))
+                mask[keypoints[:, 1]-1, keypoints[:, 0]-1] = 1
+            return np.expand_dims(keypoints, 0).copy(), np.expand_dims(mask, -1), class_ids
+        return np.expand_dims(keypoints, 0).copy(), None, class_ids
 
 
 if __name__ == "__main__":
     config = FIConfig()
 
-    import visualize
-    from model import log
-
-    dataset = FIDataset()
-    dataset.load_FI()
-    dataset.prepare()
-    image_num = np.random.randint(0, 10000)
-    original_image, image_meta, gt_class_id, gt_bbox, gt_keypoint =\
-        modellib.load_image_gt_keypoints(dataset, FIConfig, 7023)
-    log("original_image", original_image)
-    log("image_meta", image_meta)
-    log("gt_class_id", gt_class_id)
-    log("gt_bbox", gt_bbox)
-    log("gt_keypoint", gt_keypoint)
-    visualize.display_keypoints(original_image,gt_bbox,gt_keypoint,gt_class_id,dataset.class_names)
-
-    # data_tra = FIDataset()
-    # data_tra.load_FI()
-    # data_tra.prepare()
+    # import visualize
+    # from model import log
     #
-    # data_val = FIDataset()
-    # data_val.load_FI()
-    # data_val.prepare()
-    # model = modellib.MaskRCNN(mode='training', config=config, model_dir='./')
-    # model.load_weights('./mask_rcnn_coco.h5', by_name=True,
-    #                    exclude=["mrcnn_class_logits", "mrcnn_bbox_fc", "mrcnn_bbox", "mrcnn_mask"])
-    # model.train(data_tra, data_val,
-    #             learning_rate=config.LEARNING_RATE/10,
-    #             epochs=400, layers='heads')
+    # dataset = FIDataset()
+    # dataset.load_FI()
+    # dataset.prepare()
+    # image_num = np.random.randint(0, 10000)
+    # original_image, image_meta, gt_class_id, gt_bbox, gt_keypoint =\
+    #     modellib.load_image_gt_keypoints(dataset, FIConfig, image_num)
+    # log("original_image", original_image)
+    # log("image_meta", image_meta)
+    # log("gt_class_id", gt_class_id)
+    # log("gt_bbox", gt_bbox)
+    # log("gt_keypoint", gt_keypoint)
+    # visualize.display_keypoints(original_image,gt_bbox,gt_keypoint,gt_class_id,dataset.class_names)
+
+    data_tra = FIDataset()
+    data_tra.load_FI()
+    data_tra.prepare()
+
+    data_val = FIDataset()
+    data_val.load_FI(training=False)
+    data_val.prepare()
+    model = modellib.MaskRCNN(mode='training', config=config, model_dir='./logs')
+    model.load_weights('./mask_rcnn_coco.h5', by_name=True,
+                       exclude=["mrcnn_class_logits", "mrcnn_bbox_fc", "mrcnn_bbox", "mrcnn_mask"])
+    model.train(data_tra, data_val,
+                learning_rate=config.LEARNING_RATE/10,
+                epochs=400, layers='heads')
 
