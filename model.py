@@ -1580,8 +1580,8 @@ def test_keypoint_mrcnn_mask_loss_graph(target_keypoints, target_keypoint_weight
 
 def keypoint_mrcnn_mask_loss_graph(target_keypoints, target_keypoint_weights,
                                    target_class_ids, pred_keypoints_logit,
-                                   weight_loss = True,
-                                   mask_shape=[56,56],number_point=13):
+                                   weight_loss = True, mask_shape=[56,56],
+                                   number_point=13):
     """Mask softmax cross-entropy loss for the keypoint head.
 
     target_keypoints: [batch, num_rois, num_keypoints].
@@ -1736,6 +1736,7 @@ def load_image_gt_keypoints(dataset, config, image_id, augment=True,
     image = dataset.load_image(image_id)
     # mask, class_ids = dataset.load_mask(image_id)
     shape = image.shape  # 原始图像shape，[w, h, c]
+    # 这里会抛出两个警告，暂时不明原因
     keypoints, _, class_ids = dataset.load_keypoints(image_id)  # 原始图片keypoints信息
     assert (config.NUM_KEYPOINTS == keypoints.shape[1])
 
@@ -1753,7 +1754,7 @@ def load_image_gt_keypoints(dataset, config, image_id, augment=True,
         if random.randint(0, 1):
             image = np.fliplr(image)
             # mask = np.fliplr(mask)
-            keypoint_names,keypoint_flip_map = utils.get_keypoints('blouse')
+            keypoint_names,keypoint_flip_map = utils.get_keypoints(config.NAME)
             keypoints = utils.flip_keypoints(keypoint_names,keypoint_flip_map,keypoints, image.shape[1])
 
     # Bounding boxes. Note that some boxes might be all zeros
@@ -2718,8 +2719,13 @@ class MaskRCNN():
             # mask_loss = KL.Lambda(lambda x: mrcnn_mask_loss_graph(*x),
             #                                name="mrcnn_mask_loss")(
             #     [target_mask, target_class_ids, mrcnn_mask])
-            keypoint_loss = KL.Lambda(lambda x: keypoint_mrcnn_mask_loss_graph(*x, weight_loss=config.WEIGHT_LOSS), name="keypoint_mrcnn_mask_loss")(
-                [target_keypoint, target_keypoint_weight, target_class_ids, keypoint_mrcnn_mask])
+            keypoint_loss = KL.Lambda(lambda x: keypoint_mrcnn_mask_loss_graph(*x,
+                                                                               weight_loss=config.WEIGHT_LOSS,
+                                                                               number_point=config.NUM_KEYPOINTS),
+                                      name="keypoint_mrcnn_mask_loss")([target_keypoint,
+                                                                        target_keypoint_weight,
+                                                                        target_class_ids,
+                                                                        keypoint_mrcnn_mask])
             """
             target_keypoints: [batch, TRAIN_ROIS_PER_IMAGE, NUM_KEYPOINTS)
                  Keypoint labels cropped to bbox boundaries and resized to neural
@@ -2894,7 +2900,7 @@ class MaskRCNN():
             if layer.output in self.keras_model.losses:
                 continue
             self.keras_model.add_loss(
-                tf.reduce_mean(layer.output, keepdims=True))
+                tf.reduce_mean(layer.output, keep_dims=True))
 
         # Add L2 Regularization
         # Skip gamma and beta weights of batch normalization layers.
@@ -2914,7 +2920,7 @@ class MaskRCNN():
             layer = self.keras_model.get_layer(name)
             self.keras_model.metrics_names.append(name)
             self.keras_model.metrics_tensors.append(tf.reduce_mean(
-                layer.output, keepdims=True))
+                layer.output, keep_dims=True))
 
     def set_trainable(self, layer_regex, keras_model=None, indent=0, verbose=1):
         """Sets model layers as trainable if their names match
@@ -3031,7 +3037,7 @@ class MaskRCNN():
         # Callbacks
         callbacks = [
             keras.callbacks.TensorBoard(log_dir=self.log_dir,
-                                        histogram_freq=0, write_graph=True, write_images=False),
+                                        histogram_freq=0, write_graph=True, write_images=False, update_freq=10),
             keras.callbacks.ModelCheckpoint(self.checkpoint_path,
                                             verbose=0, save_weights_only=True),
         ]
@@ -3039,6 +3045,7 @@ class MaskRCNN():
         # Train
         log("\nStarting at epoch {}. LR={}\n".format(self.epoch, learning_rate))
         log("Checkpoint Path: {}".format(self.checkpoint_path))
+        log("TensorBoard Path: {}".format(self.log_dir))
         self.set_trainable(layers)
         self.compile(learning_rate, self.config.LEARNING_MOMENTUM)
 

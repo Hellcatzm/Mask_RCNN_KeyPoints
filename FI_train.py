@@ -7,11 +7,6 @@ os.environ["CUDA_VISIBLE_DEVICES"]="-1"
  
 import numpy as np
 np.set_printoptions(threshold=np.inf)
- 
-import tensorflow as tf
-config = tf.ConfigProto()
-config.gpu_options.allow_growth = True
-sess = tf.Session(config=config)
 """
 
 import os
@@ -23,6 +18,13 @@ import utils as utils
 import model as modellib
 from config import Config
 
+import tensorflow as tf
+import keras.backend.tensorflow_backend as KTF
+
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+sess = tf.Session(config=config)
+KTF.set_session(sess)
 
 PART_INDEX = {'blouse': [0, 1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14],
               'outwear': [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
@@ -42,7 +44,7 @@ PART_STR = ['neckline_left', 'neckline_right',
             'crotch',
             'bottom_left_in', 'bottom_left_out',
             'bottom_right_in', 'bottom_right_out']
-IMAGE_CATEGORY = ['blouse', 'outwear', 'dress', 'skirt', 'trousers'][0]
+IMAGE_CATEGORY = ['blouse', 'outwear', 'dress', 'skirt', 'trousers'][3]
 
 
 class FIConfig(Config):
@@ -52,12 +54,12 @@ class FIConfig(Config):
     to the toy shapes dataset.
     """
     # Give the configuration a recognizable name
-    NAME = "FI"
+    NAME = IMAGE_CATEGORY
 
     # Train on 1 GPU and 8 images per GPU. We can put multiple images on each
     # GPU because the images are small. Batch size is 8 (GPUs * images/GPU).
     GPU_COUNT = 1
-    IMAGES_PER_GPU = 2
+    IMAGES_PER_GPU = 1
     NUM_KEYPOINTS = len(PART_INDEX[IMAGE_CATEGORY])  # 更改当前训练关键点数目
     KEYPOINT_MASK_SHAPE = [56, 56]
 
@@ -102,14 +104,14 @@ class FIDataset(utils.Dataset):
                              axis=0,
                              ignore_index=True  # 忽略索引表示不会直接拼接索引，会重新计算行数索引
                              )
-        items_num = csv_data[csv_data.image_category.isin(['blouse'])].shape[0]
+        items_num = csv_data[csv_data.image_category.isin([IMAGE_CATEGORY])].shape[0]
         if training:
-            load_data = csv_data[csv_data.image_category.isin(['blouse'])][:int(items_num * 0.8)]
+            load_data = csv_data[csv_data.image_category.isin([IMAGE_CATEGORY])][:int(items_num * 0.8)]
         else:
-            load_data = csv_data[csv_data.image_category.isin(['blouse'])][int(items_num * 0.8):]
+            load_data = csv_data[csv_data.image_category.isin([IMAGE_CATEGORY])][int(items_num * 0.8):]
 
         # Add classes
-        self.add_class(source="FI", class_id=1, class_name='blouse')
+        self.add_class(source="FI", class_id=1, class_name=IMAGE_CATEGORY)
 
         # Add images
         for i in range(load_data.shape[0]):
@@ -168,7 +170,7 @@ if __name__ == "__main__":
     # dataset.prepare()
     # image_num = np.random.randint(0, 10000)
     # original_image, image_meta, gt_class_id, gt_bbox, gt_keypoint =\
-    #     modellib.load_image_gt_keypoints(dataset, FIConfig, image_num)
+    #     modellib.load_image_gt_keypoints(dataset, FIConfig, 624)
     # log("original_image", original_image)
     # log("image_meta", image_meta)
     # log("gt_class_id", gt_class_id)
@@ -183,9 +185,24 @@ if __name__ == "__main__":
     data_val = FIDataset()
     data_val.load_FI(training=False)
     data_val.prepare()
-    model = modellib.MaskRCNN(mode='training', config=config, model_dir='./logs')
-    model.load_weights('./mask_rcnn_coco.h5', by_name=True,
-                       exclude=["mrcnn_class_logits", "mrcnn_bbox_fc", "mrcnn_bbox", "mrcnn_mask"])
+
+    model_dir = './logs_{}'.format(IMAGE_CATEGORY)
+    if not os.path.exists(model_dir):
+        os.makedirs(model_dir)
+
+    model = modellib.MaskRCNN(mode='training',
+                              config=config,
+                              model_dir=model_dir)
+
+    try:
+        model.load_weights(model.find_last()[1], by_name=True,
+                           exclude=["mrcnn_class_logits", "mrcnn_bbox_fc",
+                                    "mrcnn_bbox", "mrcnn_mask"])
+    except TypeError as e:
+        model.load_weights('./mask_rcnn_coco.h5', by_name=True,
+                           exclude=["mrcnn_class_logits", "mrcnn_bbox_fc",
+                                         "mrcnn_bbox", "mrcnn_mask"])
+
     model.train(data_tra, data_val,
                 learning_rate=config.LEARNING_RATE/10,
                 epochs=400, layers='heads')
