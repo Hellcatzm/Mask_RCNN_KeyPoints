@@ -206,7 +206,3 @@ if __name__ == "__main__":
     model.train(data_tra, data_val,
                 learning_rate=config.LEARNING_RATE/10,
                 epochs=400, layers='heads')
-
-from mxnet.gluon.model_zoo import vision as models
-
-pretrained_net = models.resnet18_v2(pretrained=True)
