@@ -44,7 +44,7 @@ PART_STR = ['neckline_left', 'neckline_right',
             'crotch',
             'bottom_left_in', 'bottom_left_out',
             'bottom_right_in', 'bottom_right_out']
-IMAGE_CATEGORY = ['blouse', 'outwear', 'dress', 'skirt', 'trousers'][3]
+IMAGE_CATEGORY = ['blouse', 'outwear', 'dress', 'skirt', 'trousers'][2]
 
 
 class FIConfig(Config):
@@ -207,3 +207,6 @@ if __name__ == "__main__":
                 learning_rate=config.LEARNING_RATE/10,
                 epochs=400, layers='heads')
 
+from mxnet.gluon.model_zoo import vision as models
+
+pretrained_net = models.resnet18_v2(pretrained=True)
