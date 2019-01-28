@@ -138,7 +138,7 @@ for step in range(int(steps)):
     image_id = [path.split('/')[-1] for path in paths]
     image_category = [path.split('/')[-2] for path in paths]
 
-    for i, (id_, category, result) in enumerate(zip(image_id, image_category, results)):
+    for i, (id_, category) in enumerate(zip(image_id, image_category)):
         info_arr = np.array([id_, category] + ['-1_-1_-1' for j in range(24)])
         info_arr[np.array(PART_INDEX[IMAGE_CATEGORY]) + 2] = np.array(results)
         kps[i+start_index] = info_arr
