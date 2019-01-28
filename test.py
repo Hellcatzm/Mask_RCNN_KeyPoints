@@ -122,25 +122,25 @@ for step in range(int(steps)):
         paths = [os.path.join('../fashionAI_keypoints_test', path)
                   for path in images_path[images_path.index[start_index:]]]
     images = [skimage.io.imread(path) for path in paths]
-    results = model.detect_keypoint(images, verbose=0)
+    logits = model.detect_keypoint(images, verbose=0)
 
 #     results = [['_'.join(list(p.astype(str)))
-#                 for p in results[i]['keypoints'][0]] for i in range(batch_size)]
+#                 for p in logits[i]['keypoints'][0]] for i in range(batch_size)]
+
+    results = []
     for i in range(batch_size):
         try:
-            for p in results[i]['keypoints'][0]:
-                result = ['_'.join(list(p.astype(str)))]
+            for p in logits[i]['keypoints'][0]:
+                results.extend(['_'.join(list(p.astype(str)))])
         except IndexError as e:
-            result = ['-1_-1_-1' for i in range(24)]
-        finally:
-            results.append(result)
+            result = ['-1_-1_-1' for i in range(len(PART_INDEX[IMAGE_CATEGORY]))]
 
     image_id = [path.split('/')[-1] for path in paths]
     image_category = [path.split('/')[-2] for path in paths]
 
     for i, (id_, category, result) in enumerate(zip(image_id, image_category, results)):
-        info_arr = np.array([id_, category] + ['-1_-1_-1' for i in range(24)])
-        info_arr[np.array(PART_INDEX[IMAGE_CATEGORY]) + 2] = np.array(result)
+        info_arr = np.array([id_, category] + ['-1_-1_-1' for j in range(24)])
+        info_arr[np.array(PART_INDEX[IMAGE_CATEGORY]) + 2] = np.array(results)
         kps[i+start_index] = info_arr
 
 kps_df = pd.DataFrame(kps, columns=col)
