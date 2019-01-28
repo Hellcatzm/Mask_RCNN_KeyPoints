@@ -133,6 +133,7 @@ for step in range(int(steps)):
             for p in logits[i]['keypoints'][0]:
                 results.extend(['_'.join(list(p.astype(str)))])
         except IndexError as e:
+            print("第 {} 轮图片出现异常".format(step))
             result = ['-1_-1_-1' for i in range(len(PART_INDEX[IMAGE_CATEGORY]))]
 
     image_id = [path.split('/')[-1] for path in paths]
