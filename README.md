@@ -1,5 +1,5 @@
 # Mask_RCNN_KeyPoints
-原项目fork及讲解地址：<br>
+原Mask_RCNN项目fork版及学习讲解地址：<br>
 [MASK_RCNN](https://github.com/Hellcatzm/Mask_RCNN)<br>
 本项目讲解博客：<br>
 [『计算机视觉』Mask-RCNN_从服装关键点检测看KeyPoints分支](https://www.cnblogs.com/hellcat/p/10105465.html)<br>
